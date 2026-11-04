@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Simulación: boletería TicketMania · Colombia vs Chile</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #f4f6fb; color: #1d1d1f; }
+  header { background: #1b2a4a; color: #fff; padding: 16px 24px; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; font-size: 14px; opacity: .85; }
+  .aviso { background: #fff3cd; border-left: 6px solid #e0a800; padding: 10px 16px; margin: 16px 24px; font-size: 14px; border-radius: 6px; }
+  main { display: grid; grid-template-columns: 350px 1fr; gap: 16px; padding: 0 24px 24px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .card h2 { font-size: 16px; margin: 0 0 10px; }
+  label { display: block; font-size: 14px; margin-top: 12px; }
+  input[type=range] { width: 100%; }
+  input[type=range]:disabled { opacity: .4; }
+  .val { font-weight: 700; }
+  .escenario, .infra, .costo { font-size: 13px; background: #f0f3fa; border-radius: 8px; padding: 8px 10px; line-height: 1.6; margin-bottom: 8px; }
+  .costo { background: #fff7e6; }
+  .msg { font-size: 13px; background: #fff; border: 1px dashed #1b2a4a; border-radius: 8px; padding: 10px; line-height: 1.5; margin-top: 10px; }
+  button { background: #1b2a4a; color: #fff; border: 0; border-radius: 6px; padding: 9px 14px; cursor: pointer; margin: 8px 6px 0 0; font-size: 14px; }
+  button:disabled { background: #9aa5b8; cursor: default; }
+  .estado { font-size: 13px; font-weight: 700; margin-top: 10px; }
+  .hidden { display: none; }
+  .puestos { display: grid; grid-template-columns: repeat(auto-fill, minmax(10px, 1fr)); gap: 3px; margin: 8px 0 4px; }
+  .cel { height: 14px; background: #dfe4ee; border-radius: 3px; }
+  .cel.on { background: #dc3545; }
+  .leyPuestos { font-size: 12px; color: #555; }
+  .kpi { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin: 0 0 12px; }
+  .kpi div { background: #f0f3fa; border-radius: 8px; padding: 8px; font-size: 11px; }
+  .kpi b { display: block; font-size: 16px; margin-top: 2px; }
+  .kpi small { display: block; font-size: 10px; color: #555; margin-top: 2px; }
+  .mini { height: 6px; background: #e0e0e0; border-radius: 3px; margin-top: 4px; overflow: hidden; }
+  .mini span { display: block; height: 100%; border-radius: 3px; }
+  .alerta { padding: 12px; border-radius: 8px; font-size: 14px; margin-bottom: 12px; font-weight: 600; }
+  .ok { background: #d4edda; color: #155724; }
+  .warn { background: #fff3cd; color: #7a5a00; }
+  .bad { background: #f8d7da; color: #721c24; }
+  .fila { display: grid; grid-template-columns: 130px 1fr 70px; align-items: center; gap: 8px; font-size: 13px; margin: 6px 0; }
+  .barra { height: 22px; border-radius: 6px; background: #e9ecef; overflow: hidden; display: flex; }
+  .barra div { height: 100%; transition: width .3s; }
+  .leyenda { font-size: 12px; color: #555; margin: 4px 0 10px; line-height: 1.6; }
+  .emos { font-size: 16px; margin: 4px 0 6px; }
+  svg { width: 100%; height: auto; }
+  .log { height: 120px; overflow: auto; font-size: 12px; background: #fafafa; padding: 8px; border-radius: 6px; border: 1px solid #eee; }
+  .log div { padding: 3px 0; border-bottom: 1px solid #f0f0f0; }
+  .explica { font-size: 14px; line-height: 1.5; margin-top: 12px; }
+  .pie { font-size: 12px; color: #555; margin-top: 8px; line-height: 1.5; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 10; }
+  .overlay.hidden { display: none; }
+  .modal { background: #fff; padding: 24px; border-radius: 12px; max-width: 580px; width: 92%; max-height: 90vh; overflow: auto; font-size: 14px; line-height: 1.5; }
+  .modal table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  .modal td { border-bottom: 1px solid #eee; padding: 6px 4px; }
+  .modal td:last-child { text-align: right; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>TicketMania · Venta de boletas Colombia vs Chile</h1>
+  <p>Simulación por segundos: cola virtual, tienda, pasarela de pagos y boletería</p>
+</header>
+
+<div class="aviso">
+  <b>Esto es una simulación.</b> No mide una aplicación real. Modela cómo se reparte la carga entre la cola virtual, la tienda y la pasarela de pagos.
+  Un segundo real equivale a un segundo simulado. Los costos, multas y calificaciones son ilustrativos.
+</div>
+
+<main>
+  <section class="card">
+    <h2>Demanda y admisión</h2>
+    <label>Personas que quieren entrar a comprar: <span class="val" id="vIntentos"></span>
+      <input type="range" id="intentos" min="0" max="8500" step="125" value="8500">
+    </label>
+    <label>Umbral de admisión a la tienda (el estudiante lo ajusta): <span class="val" id="vUmbral"></span>
+      <input type="range" id="umbral" min="5000" max="8500" step="125" value="7500">
+    </label>
+    <div class="escenario" id="escenario" style="margin-top:12px"></div>
+
+    <button id="btnPlay">⏸ Pausar</button>
+    <button id="btnReset" title="Vuelve todo al estado inicial" style="background:#0d6efd">↺ Reiniciar</button>
+    <div class="estado" id="estado"></div>
+    <p class="pie">Pausar sirve para congelar un momento y discutirlo: mientras está pausada, la simulación no avanza.</p>
+
+    <h2 style="margin-top:18px">Infraestructura</h2>
+    <div class="infra" id="infraTxt"></div>
+    <div class="costo" id="costoTxt"></div>
+
+    <div style="font-size:13px;font-weight:700">Puestos de la pasarela</div>
+    <div class="puestos" id="puestos"></div>
+    <div class="leyPuestos">
+      <span style="color:#dc3545">■</span> atendiendo un pago &nbsp;
+      <span style="color:#9aa5b8">■</span> libre &nbsp; <span id="cuadroTxt"></span>
+    </div>
+
+    <button id="btnRec">Añadir recursos</button>
+    <div id="panelRec" class="hidden">
+      <label>Capacidad de la tienda (usuarios concurrentes): <span class="val" id="vCapT"></span>
+        <input type="range" id="capT" min="5000" max="10000" step="500" value="5000" disabled>
+      </label>
+      <label>Instancias de la pasarela detrás de un balanceador: <span class="val" id="vInst"></span>
+        <input type="range" id="inst" min="1" max="4" step="1" value="1" disabled>
+      </label>
+      <label>Puestos (hilos o conexiones) por instancia: <span class="val" id="vPu"></span>
+        <input type="range" id="pu" min="16" max="96" step="8" value="48" disabled>
+      </label>
+      <label>Tamaño de la cola de espera de la pasarela (peticiones): <span class="val" id="vCola"></span>
+        <input type="range" id="cola" min="200" max="4000" step="200" value="1000" disabled>
+      </label>
+      <label>Tiempo de cada transacción de pago: <span class="val" id="vTt"></span>
+        <input type="range" id="tt" min="200" max="2000" step="100" value="800" disabled>
+      </label>
+    </div>
+    <div class="msg" id="msgInfra"></div>
+    <p class="pie">Fijos: timeout de pago 60 s; cola de espera por defecto de 1.000 peticiones (se puede ajustar en Añadir recursos); timeout de pago 60 s; queja a partir de 7 s; multa de $1.900 COP por cada pago caído; 50 % de los pagos caídos reintentan (a los 2 s, máximo 3 intentos); clics cada 30 s como base, más el tiempo de tienda y de pasarela, con tope de 60 s; tope de 37.899 boletas.</p>
+  </section>
+
+  <section class="card">
+    <div style="font-weight:700;margin-bottom:8px" id="tiempo"></div>
+    <div id="alerta" class="alerta ok"></div>
+
+    <div class="kpi" id="kpi"></div>
+
+    <div style="font-size:13px;font-weight:700">Calificación de los usuarios en la tienda</div>
+    <div class="emos" id="emos"></div>
+    <div style="font-size:13px;font-weight:700">Calificación de los usuarios en la cola virtual</div>
+    <div class="emos" id="emosCola"></div>
+
+    <div style="font-size:13px;font-weight:700">Uso de cada componente</div>
+    <div class="fila"><span>Tienda</span><div class="barra"><div id="barTb" style="background:#1b2a4a"></div><div id="barTr" style="background:#fd7e14"></div></div><span id="txtT"></span></div>
+    <div class="leyenda"><span style="color:#1b2a4a">■</span> usuarios que navegan &nbsp; <span style="color:#fd7e14">■</span> reintentos de pagos caídos</div>
+    <div class="fila"><span>Pasarela de pagos</span><div class="barra"><div id="barP"></div></div><span id="txtP"></span></div>
+    <div class="pie" id="sosten"></div>
+
+    <div style="font-size:13px;font-weight:700;margin-top:12px">Respuestas por segundo y cola de pagos</div>
+    <svg id="graf" viewBox="0 0 640 280" role="img" aria-label="Gráfica de respuestas por segundo y cola"></svg>
+    <div class="leyenda">
+      <span style="color:#28a745">■</span> 200 pagos OK &nbsp;
+      <span style="color:#dc3545">■</span> 503 cola llena &nbsp;
+      <span style="color:#fd7e14">■</span> 504 timeout &nbsp;
+      <span style="color:#1b2a4a">━</span> cola de pagos (eje derecho) &nbsp;
+      <span style="color:#888">┅</span> capacidad de la pasarela
+    </div>
+
+    <div style="font-size:13px;font-weight:700;margin-top:6px">Registro de eventos</div>
+    <div class="log" id="log"></div>
+
+    <div class="explica" id="explica"></div>
+  </section>
+</main>
+
+<div class="overlay hidden" id="fin">
+  <div class="modal">
+    <div id="finBody"></div>
+    <button id="btnCerrar" style="background:#6c757d">Cerrar</button>
+    <button id="btnNueva" style="background:#0d6efd">Nueva partida</button>
+  </div>
+</div>
+
+<script>
+const TIMEOUT = 60, COLA_BASE = 1000, WIN = 120, TIENDA_BASE_MS = 150, MAX_CELDAS = 96;
+const CAP_BOLETAS = 37899, MULTA = 1900, RETRY_DELAY = 2, MAX_INT = 3;
+const UMBRAL_OK = 2, UMBRAL_QUEJA = 7, RET = 0.5;
+const BASE_THINK = 30, THINK_MAX = 60;
+const INTENTOS_0 = 8500, UMBRAL_0 = 7500, COLA_CRIT = 1000;
+const SESSION_S = 300;                       // cada persona permanece unos 5 min en la tienda
+const CONV_BASE = 0.5, CONV_MAX_EXTRA = 0.15, COSTO_PP = 1000000;
+const COSTO = { inst: 1500000, bal: 400000, puesto: 25000, tienda500: 300000, cola100: 5000 };
+const BASE_PU = 48, BASE_CAPT = 5000;
+let S, timer = null, running = false, unlocked = false;
+const $ = id => document.getElementById(id);
+const fmtN = n => Math.round(n).toLocaleString('es-CO');
+const fmt1 = n => n < 10 ? n.toFixed(1) : Math.round(n).toLocaleString('es-CO');
+const fmtCOP = n => '$' + Math.round(n).toLocaleString('es-CO') + ' COP';
+const pct = x => (x * 100).toFixed(0) + ' %';
+const fmtEspera = s => {
+  if (!isFinite(s)) return 'sin admisión';
+  const m = Math.floor(s / 60), r = Math.round(s % 60);
+  return m > 0 ? `${m} min ${r} s` : `${r} s`;
+};
+
+function reset() {
+  const gap0 = Math.max(0, INTENTOS_0 - UMBRAL_0);
+  S = { t: 0, cola: gap0, gapPrev: gap0, buckets: [], pending: [], hist: [], tot200: 0, multas: 0, quejas: 0,
+        emo: { ok: 0, mid: 0, queja: 0, caida: 0 }, emoCola: { ok: 0, mid: 0, queja: 0, caida: 0 },
+        log: [], lastLog: {}, finished: false, lastRt: 0, lastRtienda: TIENDA_BASE_MS };
+}
+
+function infra() {
+  const inst = +$('inst').value, pu = +$('pu').value, tt = +$('tt').value, capT = +$('capT').value, cola = +$('cola').value;
+  const N = inst * pu;
+  return { inst, pu, tt, N, C: N / (tt / 1000), capT, cola };
+}
+
+function costos(I) {
+  const instancias = (I.inst - 1) * COSTO.inst;
+  const balanceador = I.inst > 1 ? COSTO.bal : 0;
+  const puestos = Math.max(0, I.N - BASE_PU) * COSTO.puesto;
+  const tienda = Math.max(0, I.capT - BASE_CAPT) / 500 * COSTO.tienda500;
+  const cola = Math.max(0, I.cola - COLA_BASE) / 100 * COSTO.cola100;
+  return { instancias, balanceador, puestos, tienda, cola, total: instancias + balanceador + puestos + tienda + cola };
+}
+
+// Parámetros de la carga: lo que entra a la tienda, la conversión y el ritmo de clics
+function params() {
+  const I = infra(), cs = costos(I);
+  const D = +$('intentos').value, umb = +$('umbral').value;
+  const conv = CONV_BASE + Math.min(CONV_MAX_EXTRA, cs.total / COSTO_PP * 0.01);
+  const U = Math.min(umb, Math.max(0, D - S.cola));          // personas dentro de la tienda
+  const think = Math.min(THINK_MAX, BASE_THINK + S.lastRtienda / 1000 + S.lastRt);
+  return { D, umb, U, conv, think, pag: U * conv };
+}
+
+function addLog(now, key, text) {
+  if (S.lastLog[key] === undefined || now - S.lastLog[key] >= 10) {
+    S.log.unshift(`t = ${now} s · ${text}`);
+    S.lastLog[key] = now;
+    if (S.log.length > 60) S.log.pop();
+  }
+}
+
+function tick() {
+  if (S.finished) return;
+  const I = infra();
+  const P0 = params();
+  S.t++;
+  const now = S.t;
+
+  // Cola virtual: crece si sube el número que quiere entrar o baja el umbral; baja con las salidas de la tienda
+  const gap = Math.max(0, P0.D - P0.umb);
+  S.cola = Math.max(0, S.cola + (gap - S.gapPrev));
+  S.gapPrev = gap;
+  const admitRate = P0.U / SESSION_S;
+  const admit = Math.min(S.cola, admitRate);
+  S.cola -= admit;
+  if (S.cola < 0.5) S.cola = 0;
+
+  if (S.cola > 0.5) {
+    const espera = admitRate > 0 ? S.cola / admitRate : Infinity;
+    const cat = S.cola >= COLA_CRIT ? 'caida'
+      : espera <= 60 ? 'ok' : espera <= 300 ? 'mid' : espera <= 600 ? 'queja' : 'caida';
+    S.emoCola[cat] += S.cola;
+  }
+
+  // Tienda: usuarios que navegan + reintentos
+  const pendingBefore = S.pending.reduce((a, p) => a + p.n, 0);
+  const uT = (P0.U + pendingBefore) / I.capT;
+  const Rtienda = TIENDA_BASE_MS * (1 + uT * uT);
+  S.lastRtienda = Rtienda;
+  if (uT > 1) addLog(now, 'tienda', `Tienda sobre capacidad (${pct(uT)}): registro y carrito suben a ${Math.round(Rtienda)} ms`);
+
+  // Llegadas a la pasarela: clics de quienes están en tienda + reintentos que vencen
+  const arrBase = P0.pag / P0.think;
+  if (arrBase > 0) S.buckets.push({ t: now, n: arrBase, a: 1 });
+  let arrRetry = 0;
+  S.pending = S.pending.filter(p => {
+    if (p.t <= now) { S.buckets.push({ t: now, n: p.n, a: p.a }); arrRetry += p.n; return false; }
+    return true;
+  });
+  const arr = arrBase + arrRetry;
+
+  // Timeout: pagos que esperaron más de 60 s
+  const expA = {};
+  while (S.buckets.length && now - S.buckets[0].t >= TIMEOUT) {
+    const b = S.buckets.shift();
+    expA[b.a] = (expA[b.a] || 0) + b.n;
+  }
+
+  // Cola llena
+  const rejA = {};
+  let qlen = S.buckets.reduce((a, b) => a + b.n, 0);
+  while (qlen > I.cola && S.buckets.length) {
+    const b = S.buckets[S.buckets.length - 1];
+    const k = Math.min(b.n, qlen - I.cola);
+    b.n -= k; qlen -= k;
+    rejA[b.a] = (rejA[b.a] || 0) + k;
+    if (b.n <= 1e-9) S.buckets.pop();
+  }
+
+  // Atención: no se atienden más boletas que las que quedan
+  let cap = Math.min(I.C, CAP_BOLETAS - S.tot200), served = 0, waitSum = 0;
+  while (cap > 1e-9 && S.buckets.length) {
+    const b = S.buckets[0];
+    const k = Math.min(b.n, cap);
+    const w = now - b.t;
+    served += k; waitSum += k * w;
+    if (w <= UMBRAL_OK) S.emo.ok += k;
+    else if (w <= UMBRAL_QUEJA) S.emo.mid += k;
+    else { S.emo.queja += k; S.quejas += k; }
+    b.n -= k; cap -= k;
+    if (b.n <= 1e-9) S.buckets.shift();
+  }
+
+  // Pagos caídos: multa; la mitad vuelve a intentar
+  let fails = 0;
+  const attempts = new Set([...Object.keys(rejA), ...Object.keys(expA)].map(Number));
+  attempts.forEach(a => {
+    const f = (rejA[a] || 0) + (expA[a] || 0);
+    if (f <= 0) return;
+    fails += f;
+    if (a < MAX_INT) S.pending.push({ t: now + RETRY_DELAY, n: f * RET, a: a + 1 });
+  });
+  S.multas += fails;
+  S.emo.caida += fails;
+  const rejTot = Object.values(rejA).reduce((x, y) => x + y, 0);
+  const expTot = Object.values(expA).reduce((x, y) => x + y, 0);
+  if (rejTot > 0.5) addLog(now, '503', `503 cola llena: ${fmtN(rejTot)} pagos caídos (multa ${fmtCOP(MULTA)} cada uno)`);
+  if (expTot > 0.5) addLog(now, '504', `504 timeout: ${fmtN(expTot)} pagos caídos tras ${TIMEOUT} s de espera`);
+  if (served > 0 && waitSum / served > UMBRAL_QUEJA) addLog(now, 'queja', `Espera promedio de ${(waitSum / served).toFixed(1)} s: suben las quejas`);
+  if (S.cola >= COLA_CRIT) addLog(now, 'cola', `Cola virtual de ${fmtN(S.cola)} personas: calificación 😡`);
+
+  const qNow = S.buckets.reduce((a, b) => a + b.n, 0);
+  const avgWait = served > 0 ? waitSum / served : (S.buckets.length ? now - S.buckets[0].t : 0);
+  const rt = I.tt / 1000 + avgWait;
+  // Lo que espera hoy una persona que hace clic: su transacción + lo que hay delante en la cola
+  S.lastRt = Math.min(TIMEOUT, I.tt / 1000 + qNow / I.C);
+  const busy = Math.min(I.N, served * I.tt / 1000);
+  const uP = arr / I.C;
+  S.tot200 += served;
+
+  const pendAfter = S.pending.reduce((a, p) => a + p.n, 0);
+  S.hist.push({ t: now, arr, served, q: qNow, rt, busy, rejTot, expTot, pendN: pendAfter, uT, uP, Rtienda, cola: S.cola, think: P0.think });
+  if (S.hist.length > 600) S.hist.shift();
+
+  if (S.tot200 >= CAP_BOLETAS - 0.5) {
+    S.finished = true;
+    setRunning(false);
+    mostrarFin(now);
+  }
+}
+
+function emojiCola(cola, U) {
+  if (cola < 0.5) return '✔';
+  if (cola >= COLA_CRIT) return '😡';
+  const espera = U > 0 ? cola / (U / SESSION_S) : Infinity;
+  return espera <= 60 ? '😀' : espera <= 300 ? '🙂' : espera <= 600 ? '😕' : '😡';
+}
+
+function drawChart(I) {
+  const W = 640, H = 280, L = 50, R = 50, Tp = 15, B = 30;
+  const h = S.hist.slice(-WIN);
+  const x = i => L + i * (W - L - R) / (WIN - 1);
+  const totals = h.map(e => e.served + e.rejTot + e.expTot);
+  const yMax = Math.max(I.C, ...totals, 10) * 1.1;
+  const yB = v => H - B - Math.min(v, yMax) / yMax * (H - B - Tp);
+  const yQ = q => H - B - Math.min(q, I.cola) / I.cola * (H - B - Tp);
+  const bw = Math.max(2, (W - L - R) / (WIN - 1) * 0.8);
+
+  let s = `<line x1="${L}" y1="${H-B}" x2="${W-R}" y2="${H-B}" stroke="#999"/>`;
+  s += `<line x1="${L}" y1="${Tp}" x2="${L}" y2="${H-B}" stroke="#999"/>`;
+  s += `<line x1="${W-R}" y1="${Tp}" x2="${W-R}" y2="${H-B}" stroke="#ccc"/>`;
+  for (let k = 0; k <= 4; k++) {
+    const v = yMax * k / 4, q = I.cola * k / 4;
+    s += `<text x="${L-6}" y="${yB(v)+4}" font-size="11" text-anchor="end" fill="#555">${Math.round(v)}</text>`;
+    s += `<text x="${W-R+6}" y="${yQ(q)+4}" font-size="11" fill="#1b2a4a">${Math.round(q)}</text>`;
+  }
+  s += `<text x="${L}" y="${Tp-3}" font-size="11" fill="#555">pagos/s</text>`;
+  s += `<text x="${W-R}" y="${Tp-3}" font-size="11" text-anchor="end" fill="#1b2a4a">cola</text>`;
+  s += `<line x1="${L}" y1="${yB(I.C)}" x2="${W-R}" y2="${yB(I.C)}" stroke="#888" stroke-dasharray="6 5"/>`;
+
+  h.forEach((e, i) => {
+    const cx = x(i) - bw / 2;
+    let base = 0;
+    [[e.served, '#28a745'], [e.rejTot, '#dc3545'], [e.expTot, '#fd7e14']].forEach(([v, color]) => {
+      if (v > 0.001) {
+        const top = yB(base + v), bot = yB(base);
+        s += `<rect x="${cx}" y="${top}" width="${bw}" height="${bot - top}" fill="${color}"/>`;
+        base += v;
+      }
+    });
+  });
+
+  if (h.length > 1) {
+    s += `<polyline fill="none" stroke="#1b2a4a" stroke-width="2.5" points="${h.map((e, i) => `${x(i)},${yQ(e.q)}`).join(' ')}"/>`;
+  }
+  if (h.length) {
+    s += `<text x="${L}" y="${H-10}" font-size="11" fill="#555">t = ${h[0].t} s</text>`;
+    s += `<text x="${W-R}" y="${H-10}" font-size="11" text-anchor="end" fill="#555">t = ${h[h.length-1].t} s</text>`;
+  }
+  $('graf').innerHTML = s;
+}
+
+function drawPuestos(I, busy) {
+  const celdas = Math.min(I.N, MAX_CELDAS);
+  const porCelda = I.N / celdas;
+  const encendidas = Math.round(busy / porCelda);
+  let h = '';
+  for (let i = 0; i < celdas; i++) h += `<div class="cel${i < encendidas ? ' on' : ''}"></div>`;
+  $('puestos').innerHTML = h;
+  $('cuadroTxt').textContent = porCelda > 1 ? `(cada cuadro = ${porCelda} puestos)` : '';
+}
+
+function emosTxt(E) {
+  const tot = E.ok + E.mid + E.queja + E.caida;
+  const p = x => tot > 0 ? (x / tot * 100).toFixed(0) + ' %' : '—';
+  return `😀 ${p(E.ok)} &nbsp; 🙂 ${p(E.mid)} &nbsp; 😕 ${p(E.queja)} &nbsp; 😡 ${p(E.caida)}`;
+}
+
+function render() {
+  const I = infra(), cs = costos(I), P = params();
+  $('vIntentos').textContent = fmtN(P.D) + ' personas';
+  $('vUmbral').textContent = fmtN(P.umb) + ' en tienda';
+  $('vCapT').textContent = fmtN(I.capT) + ' usuarios';
+  $('vInst').textContent = I.inst;
+  $('vPu').textContent = I.pu + ' puestos';
+  $('vTt').textContent = I.tt + ' ms';
+
+  const maxSost = I.C * P.think / P.conv;
+  $('escenario').innerHTML =
+    `Dentro de la tienda: <b>${fmtN(P.U)}</b> personas<br>` +
+    `En la cola virtual: <b>${fmtN(S.cola)}</b> personas ${emojiCola(S.cola, P.U)}<br>` +
+    `Pagando ahora: <b>${fmtN(P.pag)}</b> (${Math.round(P.conv*100)} % de conversión)<br>` +
+    `Clic cada <b>${P.think.toFixed(0)} s</b> (30 s base + tienda + pasarela, máx. 60 s)<br>` +
+    `La pasarela sostiene hasta <b>${fmtN(maxSost)}</b> personas dentro de la tienda<br>` +
+    `Boletas disponibles: <b>${fmtN(CAP_BOLETAS - S.tot200)}</b> de ${fmtN(CAP_BOLETAS)}`;
+
+  $('infraTxt').innerHTML =
+    `Tienda: capacidad de <b>${fmtN(I.capT)}</b> usuarios concurrentes.<br>` +
+    `Pasarela: ${I.inst} instancia(s) × ${I.pu} puestos = <b>${I.N}</b>; transacción de <b>${I.tt} ms</b> → <b>${I.C.toFixed(0)} pagos/s</b>`;
+
+  $('costoTxt').innerHTML =
+    `<b>Costo adicional del evento: ${fmtCOP(cs.total)}</b><br>` +
+    `Instancias extra: ${fmtCOP(cs.instancias)} · Balanceador: ${fmtCOP(cs.balanceador)}<br>` +
+    `Puestos extra: ${fmtCOP(cs.puestos)} · Capacidad de tienda extra: ${fmtCOP(cs.tienda)}<br>` +
+    `Conversión: ${Math.round(P.conv*100)} % (50 % base, +1 pp por cada $1.000.000 invertidos, máximo 15 pp)`;
+
+  const last = S.hist[S.hist.length - 1];
+  $('tiempo').textContent = `t = ${S.t} s (1 s real = 1 s simulado)`;
+  $('estado').textContent = S.finished ? '✔ Boletería agotada' : (running ? '● En marcha' : '❚❚ En pausa');
+  $('estado').style.color = running ? '#155724' : '#7a5a00';
+  $('btnPlay').textContent = running ? '⏸ Pausar' : '▶ Reproducir';
+  $('btnPlay').disabled = S.finished;
+
+  const arr = last ? last.arr : P.pag / P.think;
+  const served = last ? last.served : 0;
+  const q = last ? last.q : 0;
+  const rt = last ? last.rt : I.tt / 1000;
+  const busy = last ? last.busy : 0;
+  const pendN = S.pending.reduce((a, p) => a + p.n, 0);
+  const uT = (P.U + pendN) / I.capT, uP = arr / I.C;
+  const Rtienda = last ? last.Rtienda : TIENDA_BASE_MS;
+  const dentro = arr * rt;
+
+  const lag = Math.ceil(I.tt / 1000);
+  const idxTerm = S.hist.length - 1 - lag;
+  const terminadas = idxTerm >= 0 ? S.hist[idxTerm].served : 0;
+  const libres = Math.max(0, I.N - busy);
+
+  const admitRate = P.U / SESSION_S;
+  const colaEspera = admitRate > 0 ? S.cola / admitRate : Infinity;
+  const wRt = Math.min(rt / UMBRAL_QUEJA, 1) * 100;
+  const cRt = rt > UMBRAL_QUEJA ? '#dc3545' : rt > UMBRAL_QUEJA * 0.7 ? '#fd7e14' : '#28a745';
+  const tiempoHTML = `<b>${rt.toFixed(1)} s</b><div class="mini"><span style="width:${wRt}%;background:${cRt}"></span></div><small>queja a partir de ${UMBRAL_QUEJA} s</small>`;
+
+  $('kpi').innerHTML = [
+    ['Llegan a pagar por s', arr.toFixed(1)],
+    ['Atendidas por s', served.toFixed(1)],
+    ['Terminadas por s', terminadas.toFixed(1)],
+    ['En cola de pagos', fmt1(q)],
+    ['Puestos libres', fmtN(libres)],
+    ['Tiempo de un pago', tiempoHTML],
+    ['Tiempo en tienda', Math.round(Rtienda) + ' ms'],
+    ['Dentro de la pasarela', fmt1(dentro)],
+    ['Reintentos en curso', fmtN(pendN)],
+    ['Cola virtual', fmtN(S.cola) + ' ' + emojiCola(S.cola, P.U)],
+    ['Espera estimada en cola', fmtEspera(colaEspera)],
+    ['Boletas vendidas', fmtN(S.tot200) + ' / ' + fmtN(CAP_BOLETAS)],
+    ['Multas acumuladas', fmtCOP(S.multas * MULTA)],
+    ['Quejas acumuladas', fmtN(S.quejas)]
+  ].map(([a, b]) => `<div>${a}${b.startsWith('<b>') ? b : '<b>' + b + '</b>'}</div>`).join('');
+
+  $('emos').innerHTML = emosTxt(S.emo);
+  $('emosCola').innerHTML = emosTxt(S.emoCola);
+
+  const wBase = Math.min(P.U / I.capT, 1) * 100;
+  const wRet = Math.min(pendN / I.capT, Math.max(0, 1 - P.U / I.capT)) * 100;
+  $('barTb').style.width = wBase + '%';
+  $('barTr').style.width = wRet + '%';
+  $('txtT').textContent = pct(uT);
+  $('barP').style.width = Math.min(uP, 1) * 100 + '%';
+  $('barP').style.background = uP > 1 ? '#dc3545' : '#1b2a4a';
+  $('txtP').textContent = pct(uP);
+
+  let sostTxt = `Totales: ${fmtN(S.tot200)} pagos OK, ${fmtN(S.multas)} pagos caídos (multa cada uno).`;
+  if (uP > 1 && uT < 1) sostTxt += ` La tienda aún tiene ${fmtN(I.capT - P.U - pendN)} personas de margen que no puede convertir en pagos.`;
+  $('sosten').textContent = sostTxt;
+
+  let cls, msg;
+  if (S.finished) {
+    cls = 'ok'; msg = '¡Boletería agotada! Revisa el resumen del evento.';
+  } else if (S.cola >= COLA_CRIT) {
+    cls = 'bad'; msg = `Cola virtual crítica: ${fmtN(S.cola)} personas esperando. Calificación 😡.`;
+  } else if (last && last.rejTot > 0.5) {
+    cls = 'bad'; msg = 'Cuello de botella en la pasarela: la cola de pagos llegó a su límite y se están rechazando pagos (503).';
+  } else if (last && last.expTot > 0.5) {
+    cls = 'bad'; msg = 'Cuello de botella en la pasarela: pagos que esperaron 60 s se cayeron (504).';
+  } else if (uP > 1 && uT < 1) {
+    cls = 'bad'; msg = `Desbalance: la tienda está al ${pct(uT)} de su capacidad, pero la pasarela ya no alcanza para tanta conversión.`;
+  } else if (uT > 1) {
+    cls = 'warn'; msg = 'La tienda está sobre su capacidad: registro y carrito se vuelven lentos, y los clics se espacian más.';
+  } else if (rt > UMBRAL_QUEJA) {
+    cls = 'warn'; msg = 'Los usuarios ya se están enojando: el tiempo de pago supera el umbral de queja de 7 s.';
+  } else if (S.cola > 0) {
+    cls = 'warn'; msg = 'Hay personas esperando en la cola virtual. Se van admitiendo a medida que salen de la tienda.';
+  } else {
+    cls = 'ok'; msg = 'Todo fluye: la tienda y la pasarela están equilibradas.';
+  }
+  $('alerta').className = 'alerta ' + cls;
+  $('alerta').textContent = msg;
+
+  drawPuestos(I, busy);
+  drawChart(I);
+  $('log').innerHTML = S.log.length ? S.log.map(l => `<div>${l}</div>`).join('') : '<div>Sin eventos todavía.</div>';
+
+  $('explica').innerHTML =
+    `<b>Cómo leer esto:</b> ${fmtN(P.D)} personas quieren entrar, pero la tienda admite ${fmtN(P.umb)}. El resto espera en la cola virtual, que avanza cuando salen personas de la tienda. ` +
+    `Dentro de la tienda, cada persona hace clic cada ${P.think.toFixed(0)} s, porque la tienda y la pasarela le hacen esperar. ` +
+    `La pasarela recibe <b>${arr.toFixed(1)}</b> pagos por segundo (incluidos los reintentos) y atiende <b>${I.C.toFixed(0)}</b>.<br><br>` +
+    `<b>Tu objetivo:</b> vender ${fmtN(CAP_BOLETAS)} boletas con el menor número de multas, quejas, espera en cola y costo adicional.`;
+
+  $('msgInfra').innerHTML = unlocked
+    ? `<b>Estás añadiendo recursos.</b> Cada recurso tiene un costo visible, que se suma al final del evento, y mejora la conversión. Subir la capacidad de la tienda no sirve si la pasarela sigue igual: el cuello de botella se mueve. Reducir el tiempo de transacción sube la capacidad sin añadir máquinas.`
+    : `Esta es la infraestructura instalada. Para cambiarla, pulsa <b>Añadir recursos</b>. Cada opción tiene un costo.`;
+}
+
+function mostrarFin(now) {
+  const cs = costos(infra());
+  const multasCOP = S.multas * MULTA;
+  const total = multasCOP + cs.total;
+  $('finBody').innerHTML = `
+    <h2 style="margin:0 0 6px">¡Boletería agotada!</h2>
+    <p>Se vendieron <b>${fmtN(CAP_BOLETAS)}</b> boletas en <b>${fmtN(now)} s</b> simulados (${(now/60).toFixed(1)} min).</p>
+    <table>
+      <tr><td>Multas por pagos caídos (${fmtN(S.multas)} × ${fmtCOP(MULTA)})</td><td>${fmtCOP(multasCOP)}</td></tr>
+      <tr><td>Quejas por espera superior a 7 s</td><td>${fmtN(S.quejas)}</td></tr>
+      <tr><td>Instancias extra</td><td>${fmtCOP(cs.instancias)}</td></tr>
+      <tr><td>Balanceador</td><td>${fmtCOP(cs.balanceador)}</td></tr>
+      <tr><td>Puestos extra</td><td>${fmtCOP(cs.puestos)}</td></tr>
+      <tr><td>Capacidad de tienda extra</td><td>${fmtCOP(cs.tienda)}</td></tr>
+      <tr><td><b>Costo total del evento</b></td><td><b>${fmtCOP(total)}</b></td></tr>
+    </table>
+    <h3 style="margin:14px 0 4px">Calificación de los usuarios en la tienda</h3>
+    <p class="emos" style="font-size:18px">${emosTxt(S.emo)}</p>
+    <h3 style="margin:14px 0 4px">Calificación de los usuarios en la cola virtual</h3>
+    <p class="emos" style="font-size:18px">${emosTxt(S.emoCola)}</p>
+    <p style="font-size:12px;color:#555">Tienda: 😀 espera hasta 2 s · 🙂 hasta 7 s · 😕 más de 7 s (queja) · 😡 pago caído (multa).<br>
+    Cola virtual: 😀 espera hasta 1 min · 🙂 hasta 5 min · 😕 hasta 10 min · 😡 más de 10 min o 1.000 personas o más en cola.</p>
+    <p>Personas que siguen en la cola virtual al terminar: <b>${fmtN(S.cola)}</b>.</p>
+    <p>Un buen equilibrio reduce las multas, las quejas y la espera en la cola, sin gastar de más.</p>`;
+  $('fin').classList.remove('hidden');
+}
+
+function setRunning(on) {
+  running = on;
+  if (on) {
+    if (!timer) timer = setInterval(() => { tick(); render(); }, 1000);
+  } else {
+    clearInterval(timer);
+    timer = null;
+  }
+  render();
+}
+
+function resetAll() {
+  $('intentos').value = INTENTOS_0;
+  $('umbral').value = UMBRAL_0;
+  $('capT').value = 5000;
+  $('inst').value = 1;
+  $('pu').value = 48;
+  $('tt').value = 800;
+  $('cola').value = 1000;
+  unlocked = false;
+  ['capT', 'inst', 'pu', 'tt', 'cola'].forEach(id => $(id).disabled = true);
+  $('panelRec').classList.add('hidden');
+  $('btnRec').textContent = 'Añadir recursos';
+  $('fin').classList.add('hidden');
+  reset();
+  setRunning(true);
+}
+
+// Cambiar la demanda o el umbral mientras corre: la cola se ajusta sola
+['intentos', 'umbral', 'capT', 'inst', 'pu', 'tt'].forEach(id => $(id).addEventListener('input', render));
+$('btnPlay').addEventListener('click', () => setRunning(!running));
+$('btnReset').addEventListener('click', resetAll);
+$('btnNueva').addEventListener('click', resetAll);
+$('btnCerrar').addEventListener('click', () => $('fin').classList.add('hidden'));
+$('btnRec').addEventListener('click', () => {
+  unlocked = !unlocked;
+  ['capT', 'inst', 'pu', 'tt', 'cola'].forEach(id => $(id).disabled = !unlocked);
+  $('panelRec').classList.toggle('hidden', !unlocked);
+  $('btnRec').textContent = unlocked ? 'Bloquear infraestructura' : 'Añadir recursos';
+  render();
+});
+
+reset();
+setRunning(true);
+</script>
+</body>
+</html>
