@@ -25,10 +25,20 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Instalar JMeter
+      - name: Instalar Apache JMeter 5.6.3
         run: |
-          sudo apt-get update
-          sudo apt-get install -y jmeter
+          if curl -fsSL --retry 3 --connect-timeout 15 \
+            https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.3.tgz \
+            -o /tmp/jmeter.tgz; then
+            tar -xzf /tmp/jmeter.tgz -C "$HOME"
+            echo "$HOME/apache-jmeter-5.6.3/bin" >> "$GITHUB_PATH"
+            "$HOME/apache-jmeter-5.6.3/bin/jmeter" --version
+          else
+            echo "No se pudo descargar JMeter 5.6.3; usando el paquete apt como respaldo"
+            sudo apt-get update
+            sudo apt-get install -y jmeter
+            jmeter --version
+          fi
 
       - name: Levantar TicketMania
         run: |
@@ -50,24 +60,31 @@ jobs:
         continue-on-error: true
         run: |
           jmeter -n \
-            -t api-ticketmania-simple/Nofuncionales.jmx \
-            -JcsvFile=api-ticketmania-simple/boletas.csv \
-            -l results.jtl \
-            -j jmeter.log
+            -t "$GITHUB_WORKSPACE/api-ticketmania-simple/Nofuncionales.jmx" \
+            -JcsvFile="$GITHUB_WORKSPACE/api-ticketmania-simple/boletas.csv" \
+            -l "$GITHUB_WORKSPACE/results.jtl" \
+            -j "$GITHUB_WORKSPACE/jmeter.log"
+
+      - name: Mostrar log de JMeter
+        if: always()
+        run: |
+          echo "--- jmeter.log ---"
+          cat "$GITHUB_WORKSPACE/jmeter.log" 2>/dev/null || echo "Sin jmeter.log"
 
       - name: Resumen del JTL
         if: always()
         run: |
-          if [ ! -f results.jtl ]; then
+          if [ ! -f "$GITHUB_WORKSPACE/results.jtl" ]; then
             echo "No se generó results.jtl"
             exit 0
           fi
           python3 - <<'PY'
-          import csv
+          import csv, os
           from collections import defaultdict
 
+          path = os.path.join(os.environ["GITHUB_WORKSPACE"], "results.jtl")
           resumen = defaultdict(lambda: {"total": 0, "fallos": 0, "ms": 0})
-          with open("results.jtl", newline="", encoding="utf-8") as f:
+          with open(path, newline="", encoding="utf-8") as f:
               for fila in csv.DictReader(f):
                   label = fila.get("label", "?")
                   r = resumen[label]
@@ -96,6 +113,8 @@ jobs:
       - name: Reportar resultados como Issues en GitHub
         if: always()
         uses: actions/github-script@v7
+        env:
+          JMETER_JTL: ${{ github.workspace }}/results.jtl
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -106,11 +125,16 @@ jobs:
         if: always()
         run: |
           python3 - <<'PY'
-          import csv, sys
+          import csv, os, sys
+
+          path = os.path.join(os.environ["GITHUB_WORKSPACE"], "results.jtl")
+          if not os.path.exists(path):
+              print(f"No se generó {path}. Revisa el log de JMeter en el artefacto jmeter-resultados.")
+              sys.exit(1)
 
           fallos = 0
           total = 0
-          with open("results.jtl", newline="", encoding="utf-8") as f:
+          with open(path, newline="", encoding="utf-8") as f:
               for fila in csv.DictReader(f):
                   total += 1
                   if str(fila.get("success", "")).strip().lower() == "false":
