@@ -1,0 +1,121 @@
+name: JMeter CI & Issues Reporter
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  test:
+    name: Ejecutar JMeter e informar incidencias
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar JMeter
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jmeter
+
+      - name: Levantar TicketMania
+        run: |
+          nohup python3 api-ticketmania-simple/ticketmania_simple.py --puerto 9000 > ticketmania.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:9000/api/salud; then
+              echo ""
+              echo "API lista en http://127.0.0.1:9000"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "La API no respondió a tiempo"
+          cat ticketmania.log || true
+          exit 1
+
+      - name: Ejecutar JMeter (sin GUI)
+        id: run_jmeter
+        continue-on-error: true
+        run: |
+          jmeter -n \
+            -t api-ticketmania-simple/Nofuncionales.jmx \
+            -JcsvFile=api-ticketmania-simple/boletas.csv \
+            -l results.jtl \
+            -j jmeter.log
+
+      - name: Resumen del JTL
+        if: always()
+        run: |
+          if [ ! -f results.jtl ]; then
+            echo "No se generó results.jtl"
+            exit 0
+          fi
+          python3 - <<'PY'
+          import csv
+          from collections import defaultdict
+
+          resumen = defaultdict(lambda: {"total": 0, "fallos": 0, "ms": 0})
+          with open("results.jtl", newline="", encoding="utf-8") as f:
+              for fila in csv.DictReader(f):
+                  label = fila.get("label", "?")
+                  r = resumen[label]
+                  r["total"] += 1
+                  r["ms"] += int(float(fila.get("elapsed") or 0))
+                  if str(fila.get("success", "")).strip().lower() == "false":
+                      r["fallos"] += 1
+
+          print(f"{'Sampler':<20}{'Muestras':>10}{'Fallos':>10}{'Prom(ms)':>12}")
+          for label, r in resumen.items():
+              prom = r["ms"] // r["total"] if r["total"] else 0
+              print(f"{label:<20}{r['total']:>10}{r['fallos']:>10}{prom:>12}")
+          PY
+
+      - name: Subir artefactos de resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmeter-resultados
+          path: |
+            results.jtl
+            jmeter.log
+            ticketmania.log
+          if-no-files-found: warn
+
+      - name: Reportar resultados como Issues en GitHub
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const reportarResultados = require('./.github/scripts/reportar-fallos.js');
+            await reportarResultados({ github, context });
+
+      - name: Fallar el job si hubo muestras fallidas
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import csv, sys
+
+          fallos = 0
+          total = 0
+          with open("results.jtl", newline="", encoding="utf-8") as f:
+              for fila in csv.DictReader(f):
+                  total += 1
+                  if str(fila.get("success", "")).strip().lower() == "false":
+                      fallos += 1
+
+          print(f"Muestras: {total} | Fallidas: {fallos}")
+          sys.exit(1 if fallos else 0)
+          PY
