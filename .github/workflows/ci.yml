@@ -59,9 +59,10 @@ jobs:
         id: run_jmeter
         continue-on-error: true
         run: |
+          test -f "$GITHUB_WORKSPACE/boletas.csv" || { echo "No existe boletas.csv en la raíz del repo"; exit 1; }
           jmeter -n \
             -t "$GITHUB_WORKSPACE/api-ticketmania-simple/Nofuncionales.jmx" \
-            -JcsvFile="$GITHUB_WORKSPACE/api-ticketmania-simple/boletas.csv" \
+            -JcsvFile="$GITHUB_WORKSPACE/boletas.csv" \
             -l "$GITHUB_WORKSPACE/results.jtl" \
             -j "$GITHUB_WORKSPACE/jmeter.log"
 
@@ -141,5 +142,8 @@ jobs:
                       fallos += 1
 
           print(f"Muestras: {total} | Fallidas: {fallos}")
+          if total == 0:
+              print("El JTL no contiene muestras: la prueba no llegó a ejecutarse.")
+              sys.exit(1)
           sys.exit(1 if fallos else 0)
           PY
